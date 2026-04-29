@@ -15,6 +15,9 @@ COORD_RE = re.compile(r"([XYZ])\s*=?\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))", re.IGNOR
 GCODE_RE = re.compile(r"\bG0*([01])\b", re.IGNORECASE)
 LABEL_RE = re.compile(r",\s*([+-]?\d+)\s*$")
 
+# This is a reconstructed executable baseline from docs/gcode-classification-notes.md.
+# The exact exploratory script/parameters from the previous computer were not committed.
+
 
 @dataclass(frozen=True)
 class GCodePoint:

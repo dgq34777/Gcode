@@ -158,18 +158,20 @@ Macro-F1 for classes `1/7/8`: about `87.75%`.
 
 Current six-class rule baseline:
 
-| Class | Precision | Recall | F1 |
-|---|---:|---:|---:|
-| 1 | 75.93% | 89.13% | 82.00% |
-| 2 | 54.14% | 90.00% | 67.61% |
-| 3 | 61.34% | 48.00% | 53.86% |
-| 6 | 70.74% | 47.11% | 56.56% |
-| 7 | 98.67% | 94.17% | 96.37% |
-| 8 | 95.30% | 76.85% | 85.09% |
+| Class | Precision | Recall | F1 | Normal false positives |
+|---|---:|---:|---:|---:|
+| 1 | 75.93% | 89.13% | 82.00% | 10 |
+| 2 | 54.14% | 90.00% | 67.61% | 57 |
+| 3 | 61.34% | 48.00% | 53.86% | 12 |
+| 6 | 70.74% | 47.11% | 56.56% | 73 |
+| 7 | 98.67% | 94.17% | 96.37% | 1 |
+| 8 | 95.30% | 76.85% | 85.09% | 6 |
 
 Accuracy: about `95.8%`.
 
 Macro-F1 over `1/2/3/6/7/8`: about `73.58%`.
+
+Note: `scripts/evaluate_rules.py` is a reconstructed executable version based on these notes. The exact exploratory script and parameter set that produced the reference baseline above were not committed from the previous computer.
 
 ## Main Error Sources
 
