@@ -8,7 +8,7 @@ from evaluate_class7_rule import predict_class7
 from evaluate_rules import GCodePoint, feature_table, parse_points
 
 
-VARIANTS = ("reference", "balanced", "high_precision")
+VARIANTS = ("reference", "balanced", "high_precision", "scanline_dedup")
 
 
 def is_class8_candidate(feature: dict[str, float], is_class7: bool, variant: str) -> bool:
@@ -47,13 +47,135 @@ def is_class8_candidate(feature: dict[str, float], is_class7: bool, variant: str
     raise ValueError(f"Unknown variant: {variant}")
 
 
+def group_by_scan_coordinate(items: list[tuple[float, int]], tolerance: float) -> list[list[tuple[float, int]]]:
+    groups: list[list[tuple[float, int]]] = []
+    current: list[tuple[float, int]] = []
+
+    for item in sorted(items):
+        if not current or abs(item[0] - current[-1][0]) <= tolerance:
+            current.append(item)
+            continue
+
+        if len(current) > 1:
+            groups.append(current)
+        current = [item]
+
+    if len(current) > 1:
+        groups.append(current)
+    return groups
+
+
+def duplicate_event_score(feature: dict[str, float]) -> tuple[float, float, float, float]:
+    return (
+        feature.get("step_ratio", 0.0),
+        feature.get("max_step", 0.0),
+        feature.get("turn1", 0.0),
+        feature.get("d2", 0.0),
+    )
+
+
+def nearest_neighbor_transition_score(
+    scan_coordinate: float,
+    line_coordinates: list[list[float]],
+    line_index: int,
+    max_gap: int = 6,
+) -> float | None:
+    distances: list[float] = []
+    for direction in (-1, 1):
+        neighbor_index = line_index + direction
+        skipped = 0
+        while 0 <= neighbor_index < len(line_coordinates) and skipped <= max_gap:
+            if line_coordinates[neighbor_index]:
+                distances.append(
+                    min(abs(scan_coordinate - coordinate) for coordinate in line_coordinates[neighbor_index])
+                )
+                break
+            neighbor_index += direction
+            skipped += 1
+
+    if not distances:
+        return None
+    return sum(distances) / len(distances)
+
+
+def deduplicate_scanline_events(
+    points: list[GCodePoint],
+    features: list[dict[str, float]],
+    predictions: list[bool],
+    class7_predictions: list[bool],
+    scan_axis: int,
+    duplicate_tolerance: float = 0.01,
+    row_event_tolerance: float = 0.08,
+    row_margin: float = 0.005,
+    row_best_max: float = 0.08,
+) -> list[bool]:
+    output = predictions[:]
+    class7_indices = [index for index, prediction in enumerate(class7_predictions) if prediction]
+
+    for start, end in zip(class7_indices, class7_indices[1:]):
+        candidates = [
+            (float(points[index].xyz[scan_axis]), index)
+            for index in range(start + 1, end)
+            if output[index]
+        ]
+        for group in group_by_scan_coordinate(candidates, duplicate_tolerance):
+            best_index = max(group, key=lambda item: duplicate_event_score(features[item[1]]))[1]
+            for _, index in group:
+                if index != best_index:
+                    output[index] = False
+
+    line_coordinates: list[list[float]] = []
+    for start, end in zip(class7_indices, class7_indices[1:]):
+        line_coordinates.append(
+            [
+                float(points[index].xyz[scan_axis])
+                for index in range(start + 1, end)
+                if output[index]
+            ]
+        )
+
+    for line_index, (start, end) in enumerate(zip(class7_indices, class7_indices[1:])):
+        candidates = [
+            (float(points[index].xyz[scan_axis]), index)
+            for index in range(start + 1, end)
+            if output[index]
+        ]
+        for group in group_by_scan_coordinate(candidates, row_event_tolerance):
+            scored: list[tuple[float, float, int]] = []
+            for scan_coordinate, index in group:
+                score = nearest_neighbor_transition_score(scan_coordinate, line_coordinates, line_index)
+                if score is not None:
+                    scored.append((score, scan_coordinate, index))
+
+            if len(scored) != len(group) or len(scored) < 2:
+                continue
+
+            scored.sort()
+            if scored[0][0] <= row_best_max and scored[1][0] - scored[0][0] >= row_margin:
+                best_index = scored[0][2]
+                for _, _, index in scored[1:]:
+                    if index != best_index:
+                        output[index] = False
+
+    return output
+
+
 def predict_class8(points: list[GCodePoint], variant: str) -> list[bool]:
     features = feature_table(points)
-    class7_predictions, _, _, _ = predict_class7(points)
-    return [
-        is_class8_candidate(feature, is_class7, variant)
+    class7_predictions, scan_axis, _, _ = predict_class7(points)
+    if variant == "scanline_dedup":
+        base_variant = "reference"
+    else:
+        base_variant = variant
+
+    predictions = [
+        is_class8_candidate(feature, is_class7, base_variant)
         for feature, is_class7 in zip(features, class7_predictions)
     ]
+    if variant != "scanline_dedup":
+        return predictions
+
+    return deduplicate_scanline_events(points, features, predictions, class7_predictions, scan_axis)
 
 
 def score(points: list[GCodePoint], predictions: list[bool]) -> tuple[int, int, int, int, float, float, float]:
