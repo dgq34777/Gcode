@@ -106,7 +106,7 @@ Class 7 is currently the most reliably recognized class.
 
 Class 8 is a transition between a flatter/stable area and a curved or changing area.
 
-The better mathematical definition is not just "large slope", but a persistent slope step across scale.
+The better mathematical definition is not just "large slope", but a persistent slope step across scale. In machining terms, class 8 usually marks the boundary where the tool path moves from a plane into an inclined plane or curved surface, or returns from that feature region back to a flatter area. It is generally accompanied by a G01 tangent/slope discontinuity.
 
 Useful features:
 
