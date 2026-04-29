@@ -1,0 +1,7 @@
+.venv/
+.tmp
+.tmp/
+.pip-cache/
+__pycache__/
+*.py[cod]
+outputs/
